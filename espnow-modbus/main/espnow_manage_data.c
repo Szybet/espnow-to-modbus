@@ -26,19 +26,14 @@ void espnow_data_prepare(espnow_send_param_t *send_param)
 
     assert(send_param->len >= sizeof(espnow_data_t));
 
-    // buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST : ESPNOW_DATA_UNICAST;
-    if(send_param->dest_mac == s_broadcast_mac)
-    {
-        buf->type = ESPNOW_DATA_BROADCAST;
-    } else {
-         buf->type = ESPNOW_DATA_UNICAST;
-    }
+    //ESP_LOGI(TAG, "Mac to check if broadcast: " MACSTR "", MAC2STR(send_param->dest_mac));
+    //ESP_LOGI(TAG, "Broadcast mac: " MACSTR "", MAC2STR(s_broadcast_mac));
+    
+    buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST : ESPNOW_DATA_UNICAST;
     buf->state = send_param->state;
     buf->seq_num = s_espnow_seq[buf->type]++;
     buf->crc = 0;
     buf->magic = send_param->magic;
-
-
 
     /* Fill all remaining bytes after the data with random values */
     esp_fill_random(buf->payload, send_param->len - sizeof(espnow_data_t));
@@ -68,6 +63,7 @@ int espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state, uint16_t
         return buf->type;
     }
 
+    ESP_LOGE(TAG, "ESP32 crc checksum failed");
     return -1;
 }
 
