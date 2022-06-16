@@ -16,42 +16,8 @@
 
 #include "main_settings.h"
 #include "espnow_manage_data.h"
-#include "debug.h"
 
-static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-static uint16_t s_espnow_seq[ESPNOW_DATA_MAX] = {0, 0};
-
-// var end
-
-static void espnow_deinit(espnow_send_param_t *send_param);
-
-// Manage Wifi
-static void wifi_init(void)
-{
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(ESPNOW_WIFI_MODE));
-    ESP_ERROR_CHECK(esp_wifi_set_protocol(ESPNOW_WIFI_IF, WIFI_PROTOCOL_LR));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "Started Wifi");
-}
-
-static void espnow_deinit_func(espnow_send_param_t *send_param)
-{
-    free(send_param->buffer);
-    free(send_param);
-    vSemaphoreDelete(s_espnow_queue);
-    esp_now_deinit();
-}
-
-// Manage wifi end
-
-// Use espnow
-
-static void espnow_task(void *pvParameter)
+void espnow_task_listen(void *pvParameter)
 {
     espnow_event_t evt;
     uint8_t recv_state = 0;
@@ -80,7 +46,7 @@ static void espnow_task(void *pvParameter)
 
 }
 
-static esp_err_t espnow_init(void)
+esp_err_t espnow_init_listen(void)
 {
     espnow_send_param_t *send_param;
 
@@ -149,25 +115,8 @@ static esp_err_t espnow_init(void)
     memcpy(send_param->dest_mac, s_broadcast_mac, ESP_NOW_ETH_ALEN);
     espnow_data_prepare(send_param, s_broadcast_mac, s_espnow_seq);
 
-    xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
+    xTaskCreate(espnow_task_listen, "espnow_task_listen", 2048, send_param, 4, NULL);
 
     ESP_LOGI(TAG, "Exiting espnow init");
     return ESP_OK;
-}
-
-// Use espnow end
-
-void app_main(void)
-{
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
-    wifi_init();
-    espnow_init_listen();
 }

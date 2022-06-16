@@ -51,9 +51,8 @@ void espnow_data_prepare(espnow_send_param_t *send_param, uint8_t s_broadcast_ma
 /* ESPNOW sending or receiving callback function is called in WiFi task.
  * Users should not do lengthy operations from this task. Instead, post
  * necessary data to a queue and handle it from a lower priority task. */
-static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
+void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-    ESP_LOGD(TAG, "Sended something");
     espnow_event_t evt;
     espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
 
@@ -72,10 +71,8 @@ static void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status
     }
 }
 
-static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len)
+void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len)
 {
-    ESP_LOGD(TAG, "Received something");
-
     espnow_event_t evt;
     espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
 

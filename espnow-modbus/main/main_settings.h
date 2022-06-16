@@ -8,8 +8,22 @@
 
 #define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
 
-
 #define ESPNOW_MAXDELAY 512
+
+// var begin
+
+#define ESPNOW_PMK "pmk1234567890123"
+// ESPNOW primary master to use. The length of ESPNOW primary master must be 16 bytes.
+#define ESPNOW_LMK "lmk1234567890123"
+// ESPNOW local master to use. The length of ESPNOW local master must be 16 bytes.
+#define ESPNOW_CHANNEL 1
+// range 0 14
+#define ESPNOW_SEND_DELAY 1000
+// range 0 65535
+// Delay between sending two ESPNOW data, unit: ms.
+#define ESPNOW_SEND_LEN 10
+// "Send len"
+//range 10 250
 
 static const char *TAG = "log";
 
