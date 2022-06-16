@@ -18,12 +18,13 @@
 #include "espnow_manage_data.h"
 #include "debug.h"
 
-static uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-static uint16_t s_espnow_seq[ESPNOW_DATA_MAX] = {0, 0};
+uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+//uint16_t s_espnow_seq[ESPNOW_DATA_MAX] = {0, 0};
+uint16_t s_espnow_seq[2] = {0, 0};
 
-// var end
+xQueueHandle s_espnow_queue;
 
-static void espnow_deinit(espnow_send_param_t *send_param);
+//static void espnow_deinit(espnow_send_param_t *send_param);
 
 // Manage Wifi
 static void wifi_init(void)
@@ -39,7 +40,7 @@ static void wifi_init(void)
     ESP_LOGI(TAG, "Started Wifi");
 }
 
-static void espnow_deinit_func(espnow_send_param_t *send_param)
+void espnow_deinit_func(espnow_send_param_t *send_param)
 {
     free(send_param->buffer);
     free(send_param);
@@ -147,7 +148,7 @@ static esp_err_t espnow_init(void)
         return ESP_FAIL;
     }
     memcpy(send_param->dest_mac, s_broadcast_mac, ESP_NOW_ETH_ALEN);
-    espnow_data_prepare(send_param, s_broadcast_mac, s_espnow_seq);
+    espnow_data_prepare(send_param);
 
     xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
 
@@ -169,5 +170,6 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
 
     wifi_init();
+    //espnow_init_listen(s_broadcast_mac, s_espnow_seq);
     espnow_init_listen();
 }

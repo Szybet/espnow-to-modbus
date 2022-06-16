@@ -4,7 +4,14 @@
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
 
-#define ESPNOW_QUEUE_SIZE 6
+#define ESPNOW_QUEUE_SIZE 10
+
+extern uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN];
+extern uint16_t s_espnow_seq[2];
+
+static const char *TAG = "log";
+
+extern xQueueHandle s_espnow_queue;
 
 #define IS_BROADCAST_ADDR(addr) (memcmp(addr, s_broadcast_mac, ESP_NOW_ETH_ALEN) == 0)
 
@@ -24,11 +31,6 @@
 #define ESPNOW_SEND_LEN 10
 // "Send len"
 //range 10 250
-
-static const char *TAG = "log";
-
-static xQueueHandle s_espnow_queue;
-
 
 typedef enum
 {
@@ -93,5 +95,7 @@ typedef struct
     uint8_t *buffer;                    // Buffer pointing to ESPNOW data.
     uint8_t dest_mac[ESP_NOW_ETH_ALEN]; // MAC address of destination device.
 } espnow_send_param_t;
+
+void espnow_deinit_func(espnow_send_param_t *send_param);
 
 #endif
