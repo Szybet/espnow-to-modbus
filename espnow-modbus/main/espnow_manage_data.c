@@ -23,11 +23,12 @@
 void espnow_data_prepare(espnow_send_param_t *send_param) {
   espnow_data_t *buf = (espnow_data_t *)send_param->buffer;
 
-  assert(send_param->len >= sizeof(espnow_data_t));
+  ESP_LOGI(TAG, "send param lenght: %d", send_param->len);
+  ESP_LOGI(TAG, "espnow_data_t size: %d", sizeof(espnow_data_t));
 
-  // ESP_LOGI(TAG, "Mac to check if broadcast: " MACSTR "",
-  // MAC2STR(send_param->dest_mac)); ESP_LOGI(TAG, "Broadcast mac: " MACSTR "",
-  // MAC2STR(s_broadcast_mac));
+  send_param->len = sizeof(espnow_data_t);
+
+  assert(send_param->len >= sizeof(espnow_data_t));
 
   buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST
                                                       : ESPNOW_DATA_UNICAST;
@@ -89,8 +90,8 @@ espnow_send_param_t *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
   if (array_size > ESP_NOW_MAX_DATA_LEN) {
     ESP_LOGE(TAG, "Array lenght to long");
   }
-  send_param->len = array_size;
-  send_param->buffer = malloc(array_size);
+  send_param->len = array_size;            // this may cause problems
+  send_param->buffer = malloc(array_size); // ???
   if (send_param->buffer == NULL) {
     ESP_LOGE(TAG, "Malloc send buffer fail");
     free(send_param);
@@ -98,11 +99,20 @@ espnow_send_param_t *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
     esp_now_deinit();
     // return ESP_FAIL;
   }
+
+  ESP_LOGI(TAG, "send_param->buffer size: %d", sizeof(send_param->buffer));
+
   memcpy(send_param->buffer, array, array_size);
 
   memcpy(send_param->dest_mac, mac, ESP_NOW_ETH_ALEN);
+
   espnow_data_prepare(send_param);
   return send_param;
+}
+
+void print_mac(const unsigned char *mac) {
+  printf("%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3],
+         mac[4], mac[5]);
 }
 
 // Manage / Convert data end
@@ -152,7 +162,7 @@ void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   }
 }
 
-void espnow_addpeer(uint8_t* mac) {
+void espnow_addpeer(uint8_t *mac) {
   // malloc - Allocates size bytes of uninitialized storage.
   esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
   if (peer == NULL) {

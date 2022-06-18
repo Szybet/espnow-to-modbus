@@ -84,13 +84,15 @@ static void espnow_task(void *pvParameter) {
                                 &recv_seq, &recv_magic);
         free(recv_cb->data);
 
+        ESP_LOGI(TAG, "Add peer: " MACSTR "", MAC2STR(recv_cb->mac_addr));
+
         if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
           espnow_addpeer(recv_cb->mac_addr);
         } else {
           ESP_LOGI(TAG, "Peer is already added");
         }
 
-        char message[] = "esp message 123";
+        char message[] = "esp message 123 aaa";
         int array_size_chars = sizeof(message) / sizeof(message[0]);
         uint8_t array_bytes[array_size_chars];
 
@@ -100,7 +102,7 @@ static void espnow_task(void *pvParameter) {
         int array_size_bytes = sizeof(array_bytes);
 
         espnow_send_param_t *send_param =
-            espnow_data_create(s_broadcast_mac, array_bytes, array_size_bytes);
+            espnow_data_create(recv_cb->mac_addr, array_bytes, array_size_bytes);
 
         esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len);
 
@@ -168,18 +170,32 @@ void app_main(void) {
 
   wifi_init();
 
+  unsigned char mac_base[6] = {0};
+  esp_efuse_mac_get_default(mac_base);
+  esp_read_mac(mac_base, ESP_MAC_WIFI_STA);
+  unsigned char mac_local_base[6] = {0};
+  unsigned char mac_uni_base[6] = {0};
+  esp_derive_local_mac(mac_local_base, mac_uni_base);
+  printf("Local Address: ");
+  print_mac(mac_local_base);
+  printf("\nUni Address: ");
+  print_mac(mac_uni_base);
+  printf("\nMAC Address: ");
+  print_mac(mac_base);
+  printf("\n");
+
   espnow_init_minimal();
 
-  char message[] = "esp wtf?";
+  char message[] = "esp";
   int array_size_chars = sizeof(message) / sizeof(message[0]);
   uint8_t array_bytes[array_size_chars];
 
   for (int i = 0; i < array_size_chars; i++) {
     array_bytes[i] = (uint8_t)message[i];
   }
-  int array_size_bytes = sizeof(array_bytes);
+  int array_size_bytes = sizeof(array_bytes); // / sizeof(array_bytes[0]);
 
-  // It has maybe too much size
+  ESP_LOGI(TAG, "array_size_bytes: %d", array_size_bytes);
 
   espnow_send_param_t *send_param =
       espnow_data_create(s_broadcast_mac, array_bytes, array_size_bytes);
