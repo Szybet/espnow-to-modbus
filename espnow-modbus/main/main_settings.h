@@ -41,7 +41,6 @@ typedef enum
 typedef struct
 {
     uint8_t mac_addr[ESP_NOW_ETH_ALEN];
-    esp_now_send_status_t status;
 } espnow_event_send_cb_t;
 
 typedef struct
@@ -74,24 +73,17 @@ enum
 /* User defined field of ESPNOW. */
 typedef struct
 {
-    uint8_t type;       // Broadcast or unicast ESPNOW data.
-    uint8_t state;      // Indicate that if has received broadcast ESPNOW data or not.
-    uint16_t seq_num;   // Sequence number of ESPNOW data.
-    uint16_t crc;       // CRC16 value of ESPNOW data.
-    uint32_t magic;     // Magic number which is used to determine which device to send unicast ESPNOW data.
     uint8_t payload[0]; // Real payload of ESPNOW data.
 } __attribute__((packed)) espnow_data_t;
 
 /* Parameters of sending ESPNOW data. */
 typedef struct
 {
-    uint8_t state;                      // Indicate that if has received broadcast ESPNOW data or not.
-    uint32_t magic;                     // Magic number which is used to determine which device to send unicast ESPNOW data.
     int len;                            // Length of ESPNOW data to be sent, unit: byte.
     uint8_t *buffer;                    // Buffer pointing to ESPNOW data.
     uint8_t dest_mac[ESP_NOW_ETH_ALEN]; // MAC address of destination device.
-} espnow_send_param_t;
+} espnow_send;
 
-void espnow_deinit_func(espnow_send_param_t *send_param);
+void espnow_deinit_func(espnow_send *send_param);
 
 #endif

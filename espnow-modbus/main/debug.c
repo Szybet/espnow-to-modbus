@@ -32,58 +32,9 @@
 // Delay between sending two ESPNOW data, unit: ms.
 #define ESPNOW_SEND_LEN 10
 // "Send len"
-// range 10 250
 
-void espnow_task_listen(void *pvParameter) {
-  espnow_event_t evt;
-  uint8_t recv_state = 0;
-  uint16_t recv_seq = 0;
-  int recv_magic = 0;
-  bool is_broadcast = false;
-  int ret;
 
-  vTaskDelay(5000 / portTICK_RATE_MS);
-  ESP_LOGI(TAG, "Start listening");
-
-  while (xQueueReceive(s_espnow_queue, &evt, portMAX_DELAY) == pdTRUE) {
-    switch (evt.id) {
-    case ESPNOW_SEND_CB: {
-      ESP_LOGI(TAG, "Sending data?");
-      break;
-    }
-    case ESPNOW_RECV_CB: {
-      espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-      ret = espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state,
-                              &recv_seq, &recv_magic);
-      espnow_data_t *buf = (espnow_data_t *)recv_cb->data;
-
-      uint16_t crc_cal = 0;
-      crc_cal =
-          esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, recv_cb->data_len);
-
-      free(recv_cb->data);
-      if (ret == ESPNOW_DATA_BROADCAST) {
-        ESP_LOGI(
-            TAG,
-            "Receive %dth broadcast data from: " MACSTR ", len: %d, crc: %d",
-            recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len, crc_cal);
-      } else if (ret == ESPNOW_DATA_UNICAST) {
-        ESP_LOGI(
-            TAG, "Receive %dth unicast data from: " MACSTR ", len: %d, crc: %d",
-            recv_seq, MAC2STR(recv_cb->mac_addr), recv_cb->data_len, crc_cal);
-      } else {
-        ESP_LOGI(TAG, "Receive error data from: " MACSTR "",
-                 MAC2STR(recv_cb->mac_addr));
-      }
-      break;
-    }
-    default:
-      ESP_LOGE(TAG, "Callback type error: %d", evt.id);
-      break;
-    }
-  }
-}
-
+/*
 // PvParameter is the argument provided with QTaskCreate
 void espnow_task_send(void *pvParameter) {
   espnow_event_t evt;
@@ -139,16 +90,10 @@ void espnow_task_send(void *pvParameter) {
         ESP_LOGI(TAG, "Send data to " MACSTR ", status: %d",
                  MAC2STR(send_cb->mac_addr), send_cb->status);
 
-        /*if (is_broadcast && (send_param->broadcast == false))
-        {
-            break;
-        }*/
-
-        /* Delay a while before sending the next data. */
-        /*if (send_param->delay > 0)
+        //if (send_param->delay > 0)
         {
             vTaskDelay(send_param->delay / portTICK_RATE_MS);
-        }*/
+        //}
         break;
       }
       case ESPNOW_RECV_CB: {
@@ -161,7 +106,6 @@ void espnow_task_send(void *pvParameter) {
         crc_cal =
             esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, recv_cb->data_len);
 
-        free(recv_cb->data);
         if (ret == ESPNOW_DATA_BROADCAST) {
           ESP_LOGI(
               TAG,
@@ -176,6 +120,24 @@ void espnow_task_send(void *pvParameter) {
           ESP_LOGI(TAG, "Receive error data from: " MACSTR "",
                    MAC2STR(recv_cb->mac_addr));
         }
+        char message[recv_cb->data_len];
+
+        for (int i = 0; i < recv_cb->data_len; i++) {
+          message[i] = buf->payload[i];
+        }
+
+        ESP_LOGI(TAG, "Message is: %s", message);
+
+        //
+                char message[recv_cb->data_len];
+
+        for (int i = 0; i < recv_cb->data_len; i++) {
+          message[i] = recv_cb->data[i] + '0';
+          ESP_LOGI(TAG, "for: %u", recv_cb->data[i]);
+        }
+        ESP_LOGI(TAG, "With message: %s", message);
+        /(recv_cb->data);
+        //
         break;
       }
       default:
@@ -195,15 +157,15 @@ esp_err_t espnow_init_debug() {
     return ESP_FAIL;
   }
 
-  /* Initialize ESPNOW and register sending and receiving callback function. */
+  // Initialize ESPNOW and register sending and receiving callback function. 
   ESP_ERROR_CHECK(esp_now_init());
   ESP_ERROR_CHECK(esp_now_register_send_cb(espnow_send_cb));
   ESP_ERROR_CHECK(esp_now_register_recv_cb(espnow_recv_cb));
 
-  /* Set primary master key. */
+  // Set primary master key. 
   ESP_ERROR_CHECK(esp_now_set_pmk((uint8_t *)ESPNOW_PMK));
 
-  /* Add broadcast peer information to peer list. */
+  // Add broadcast peer information to peer list. 
   // malloc - Allocates size bytes of uninitialized storage.
   esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
   if (peer == NULL) {
@@ -222,7 +184,7 @@ esp_err_t espnow_init_debug() {
   ESP_ERROR_CHECK(esp_now_add_peer(peer));
   free(peer);
 
-  /* Initialize sending parameters. */
+   Initialize sending parameters. 
   send_param = malloc(sizeof(espnow_send_param_t));
   memset(send_param, 0, sizeof(espnow_send_param_t));
   if (send_param == NULL) {
@@ -255,7 +217,7 @@ esp_err_t espnow_init_debug() {
   ESP_LOGI(TAG, "Exiting espnow init");
   return ESP_OK;
 }
-
+*/
 // Some debug code:
 
 /*
@@ -277,6 +239,22 @@ char message[] = "esp message 123";
   }
   int array_size_bytes = sizeof(array_bytes);
 
-  espnow_send_param_t *send_param = espnow_data_create(s_broadcast_mac, array_bytes, array_size_bytes);
+  espnow_send_param_t *send_param = espnow_data_create(s_broadcast_mac,
+array_bytes, array_size_bytes);
+
+*/
+
+/*
+
+  char message[] = "broadcast jest wysylane 111";
+  int array_size_chars = sizeof(message) / sizeof(message[0]);
+  uint8_t array_bytes[array_size_chars];
+
+  for (int i = 0; i < array_size_chars; i++) {
+    array_bytes[i] = (uint8_t)message[i];
+  }
+
+  espnow_send_param_t *send_param =
+      espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
 
 */

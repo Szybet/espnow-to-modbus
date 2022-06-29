@@ -19,60 +19,11 @@
 
 // Manage / Convert espnow data
 
-// this function tweaks buf inside send_param
-void espnow_data_prepare(espnow_send_param_t *send_param) {
-  espnow_data_t *buf = (espnow_data_t *)send_param->buffer;
-
-  ESP_LOGI(TAG, "send param lenght: %d", send_param->len);
-  ESP_LOGI(TAG, "espnow_data_t size: %d", sizeof(espnow_data_t));
-
-  send_param->len = sizeof(espnow_data_t);
-
-  assert(send_param->len >= sizeof(espnow_data_t));
-
-  buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST
-                                                      : ESPNOW_DATA_UNICAST;
-  buf->state = send_param->state;
-  buf->seq_num = s_espnow_seq[buf->type]++;
-  buf->crc = 0;
-  buf->magic = send_param->magic;
-
-  /* Fill all remaining bytes after the data with random values */
-  esp_fill_random(buf->payload, send_param->len - sizeof(espnow_data_t));
-  buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
-}
-
-int espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state,
-                      uint16_t *seq, int *magic) {
-  espnow_data_t *buf = (espnow_data_t *)data;
-  uint16_t crc, crc_cal = 0;
-
-  if (data_len < sizeof(espnow_data_t)) {
-    ESP_LOGE(TAG, "Receive ESPNOW data too short, len:%d", data_len);
-    return -1;
-  }
-
-  *state = buf->state;
-  *seq = buf->seq_num;
-  *magic = buf->magic;
-  crc = buf->crc;
-  buf->crc = 0;
-  crc_cal = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, data_len);
-
-  if (crc_cal == crc) {
-    return buf->type;
-  }
-
-  ESP_LOGE(TAG, "ESP32 crc checksum failed");
-  return -1;
-}
-
-espnow_send_param_t *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
-                                        uint8_t *array, int array_size) {
-  /* Initialize sending parameters. */
-  espnow_send_param_t *send_param;
-  send_param = malloc(sizeof(espnow_send_param_t));
-  memset(send_param, 0, sizeof(espnow_send_param_t));
+espnow_send *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN], uint8_t *array,
+                                int array_length) {
+  espnow_send *send_param;
+  send_param = malloc(sizeof(espnow_send));
+  memset(send_param, 0, sizeof(espnow_send));
   if (send_param == NULL) {
     ESP_LOGE(TAG, "Malloc send parameter fail");
     vSemaphoreDelete(s_espnow_queue);
@@ -80,18 +31,19 @@ espnow_send_param_t *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
     // return ESP_FAIL;
   }
 
-  send_param->state = 0;
-  send_param->magic = esp_random();
   // ESPNOW_SEND_LEN = 10
   // ESP_NOW_MAX_DATA_LEN = 250 bytes
   // https://docs.espressif.com/projects/esp-idf/en/v4.4.1/esp32/api-reference/network/esp_now.html?highlight=esp_now_send#_CPPv412esp_now_sendPK7uint8_tPK7uint8_t6size_t
-
   // https://flaviocopes.com/c-array-length/
-  if (array_size > ESP_NOW_MAX_DATA_LEN) {
+  if (array_length > ESP_NOW_MAX_DATA_LEN) {
     ESP_LOGE(TAG, "Array lenght to long");
   }
-  send_param->len = array_size;            // this may cause problems
-  send_param->buffer = malloc(array_size); // ???
+
+  // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_now.html
+  // Length: The length is the total length of Organization Identifier, Type,
+  // Version and Body.
+  send_param->len = array_length; // hmmmmmmm
+  send_param->buffer = malloc(array_length);
   if (send_param->buffer == NULL) {
     ESP_LOGE(TAG, "Malloc send buffer fail");
     free(send_param);
@@ -99,14 +51,8 @@ espnow_send_param_t *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
     esp_now_deinit();
     // return ESP_FAIL;
   }
-
-  ESP_LOGI(TAG, "send_param->buffer size: %d", sizeof(send_param->buffer));
-
-  memcpy(send_param->buffer, array, array_size);
-
+  memcpy(send_param->buffer, array, send_param->len);
   memcpy(send_param->dest_mac, mac, ESP_NOW_ETH_ALEN);
-
-  espnow_data_prepare(send_param);
   return send_param;
 }
 
@@ -132,7 +78,6 @@ void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
   evt.id = ESPNOW_SEND_CB;
   memcpy(send_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-  send_cb->status = status;
   if (xQueueSend(s_espnow_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
     ESP_LOGW(TAG, "Send send queue fail");
   }
@@ -163,21 +108,126 @@ void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len) {
 }
 
 void espnow_addpeer(uint8_t *mac) {
-  // malloc - Allocates size bytes of uninitialized storage.
-  esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
-  if (peer == NULL) {
-    ESP_LOGE(TAG, "Malloc peer information fail");
-    vSemaphoreDelete(s_espnow_queue);
-    esp_now_deinit();
-    return ESP_FAIL;
+  if (esp_now_is_peer_exist(mac) == false) {
+    // malloc - Allocates size bytes of uninitialized storage.
+    esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
+    if (peer == NULL) {
+      ESP_LOGE(TAG, "Malloc peer information fail");
+      vSemaphoreDelete(s_espnow_queue);
+      esp_now_deinit();
+      return ESP_FAIL;
+    }
+
+    // https://en.cppreference.com/w/cpp/string/byte/memset
+    memset(peer, 0, sizeof(esp_now_peer_info_t));
+    peer->channel = ESPNOW_CHANNEL;
+    peer->ifidx = ESPNOW_WIFI_IF;
+    peer->encrypt = false;
+    memcpy(peer->peer_addr, mac, ESP_NOW_ETH_ALEN);
+    ESP_ERROR_CHECK(esp_now_add_peer(peer));
+    free(peer);
+  }
+}
+
+void espnow_send_smarter(espnow_send *data) {
+  esp_now_send(data->dest_mac, data->buffer, data->len);
+}
+
+// old
+/*
+
+// this function tweaks buf inside send_param
+void espnow_data_prepare(espnow_send *send_param) {
+  espnow_data_t *buf = (espnow_data_t *)send_param->buffer;
+
+  ESP_LOGI(TAG, "send param lenght: %d", send_param->len);
+  ESP_LOGI(TAG, "espnow_data_t size: %d", sizeof(espnow_data_t));
+
+  // this is stupid becouse in espnow_data_t is only a pointer to the data, and
+  // always has 10
+  // assert(send_param->len >= sizeof(espnow_data_t));
+
+  buf->type = IS_BROADCAST_ADDR(send_param->dest_mac) ? ESPNOW_DATA_BROADCAST
+                                                      : ESPNOW_DATA_UNICAST;
+  buf->state = send_param->state;
+  buf->seq_num = s_espnow_seq[buf->type]++;
+  buf->crc = 0;
+  buf->magic = send_param->magic;
+
+  // esp_fill_random(buf->payload, send_param->len - sizeof(espnow_data_t));
+  buf->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, send_param->len);
+}
+
+int espnow_data_parse(uint8_t *data, uint16_t data_len, uint8_t *state,
+                      uint16_t *seq, int *magic) {
+  espnow_data_t *buf = (espnow_data_t *)data;
+  uint16_t crc, crc_cal = 0;
+
+  if (data_len < sizeof(espnow_data_t)) {
+    ESP_LOGE(TAG, "Receive ESPNOW data too short, len:%d", data_len);
+    return -1;
   }
 
-  // https://en.cppreference.com/w/cpp/string/byte/memset
-  memset(peer, 0, sizeof(esp_now_peer_info_t));
-  peer->channel = ESPNOW_CHANNEL;
-  peer->ifidx = ESPNOW_WIFI_IF;
-  peer->encrypt = false;
-  memcpy(peer->peer_addr, mac, ESP_NOW_ETH_ALEN);
-  ESP_ERROR_CHECK(esp_now_add_peer(peer));
-  free(peer);
+  *state = buf->state;
+  *seq = buf->seq_num;
+  *magic = buf->magic;
+  crc = buf->crc;
+  buf->crc = 0;
+  crc_cal = esp_crc16_le(UINT16_MAX, (uint8_t const *)buf, data_len);
+
+  if (crc_cal == crc) {
+    return buf->type;
+  }
+
+  ESP_LOGE(TAG, "ESP32 crc checksum failed");
+  return -1;
 }
+
+espnow_send *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN],
+                                        uint8_t *array, int array_size) {
+  espnow_send *send_param;
+  send_param = malloc(sizeof(espnow_send));
+  memset(send_param, 0, sizeof(espnow_send));
+  if (send_param == NULL) {
+    ESP_LOGE(TAG, "Malloc send parameter fail");
+    vSemaphoreDelete(s_espnow_queue);
+    esp_now_deinit();
+    // return ESP_FAIL;
+  }
+
+  send_param->state = 0;
+  send_param->magic = esp_random();
+  // ESPNOW_SEND_LEN = 10
+  // ESP_NOW_MAX_DATA_LEN = 250 bytes
+  //
+https://docs.espressif.com/projects/esp-idf/en/v4.4.1/esp32/api-reference/network/esp_now.html?highlight=esp_now_send#_CPPv412esp_now_sendPK7uint8_tPK7uint8_t6size_t
+
+  // https://flaviocopes.com/c-array-length/
+  if (array_size > ESP_NOW_MAX_DATA_LEN) {
+    ESP_LOGE(TAG, "Array lenght to long");
+  }
+
+  //
+https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_now.html
+  // Length: The length is the total length of Organization Identifier, Type,
+  // Version and Body.
+  //send_param->len = 3 + 1 + 1 + array_size; // this doesnt work.
+  send_param->len = array_size + 1 + 1 + 2 + 2 + 4;
+  send_param->buffer = malloc(array_size);  // ???
+  if (send_param->buffer == NULL) {
+    ESP_LOGE(TAG, "Malloc send buffer fail");
+    free(send_param);
+    vSemaphoreDelete(s_espnow_queue);
+    esp_now_deinit();
+    // return ESP_FAIL;
+  }
+
+  memcpy(send_param->buffer, array, send_param->len);
+
+  memcpy(send_param->dest_mac, mac, ESP_NOW_ETH_ALEN);
+
+  espnow_data_prepare(send_param);
+  return send_param;
+}
+
+*/

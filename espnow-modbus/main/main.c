@@ -14,18 +14,47 @@
 #include <string.h>
 #include <time.h>
 
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "sdkconfig.h"
+
 #include "debug.h"
 #include "espnow_manage_data.h"
 #include "main_settings.h"
 
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
-// uint16_t s_espnow_seq[ESPNOW_DATA_MAX] = {0, 0};
-uint16_t s_espnow_seq[2] = {0, 0};
-
 xQueueHandle s_espnow_queue;
 
-// static void espnow_deinit(espnow_send_param_t *send_param);
+// static void espnow_deinit(espnow_send *send_param);
+
+void init_uart() {
+  uart_config_t uart_config = {
+      .baud_rate = 1200,
+      .data_bits = UART_DATA_8_BITS,
+      .parity = UART_PARITY_EVEN,
+      .stop_bits = UART_STOP_BITS_1,
+      .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+      //.rx_flow_ctrl_thresh = 122,
+      .source_clk = UART_SCLK_APB,
+  };
+  int intr_alloc_flags = 0;
+
+#if CONFIG_UART_ISR_IN_IRAM
+  intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+#endif
+  ESP_LOGI(TAG, "intr_alloc_flags %d", intr_alloc_flags);
+  ESP_ERROR_CHECK(
+      uart_driver_install(UART_NUM_2, 256, 256, 0, NULL, intr_alloc_flags));
+
+  ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
+
+  ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, 17, 16, 2, -1));
+
+  //ESP_ERROR_CHECK(uart_set_mode(UART_NUM_2, UART_MODE_RS485_HALF_DUPLEX));
+
+  //ESP_ERROR_CHECK(uart_set_rx_timeout(UART_NUM_2, 3));
+}
 
 // Manage Wifi
 static void wifi_init(void) {
@@ -40,7 +69,7 @@ static void wifi_init(void) {
   ESP_LOGI(TAG, "Started Wifi");
 }
 
-void espnow_deinit_func(espnow_send_param_t *send_param) {
+void espnow_deinit_func(espnow_send *send_param) {
   free(send_param->buffer);
   free(send_param);
   vSemaphoreDelete(s_espnow_queue);
@@ -52,60 +81,50 @@ void espnow_deinit_func(espnow_send_param_t *send_param) {
 // Use espnow
 
 static void espnow_task(void *pvParameter) {
-  espnow_send_param_t *send_param_broadcast =
-      (espnow_send_param_t *)pvParameter; // this is broadcast always
+  espnow_send *send_param_broadcast =
+      (espnow_send *)pvParameter; // this is broadcast always
 
   espnow_event_t evt;
-  uint8_t recv_state = 0;
-  uint16_t recv_seq = 0;
-  int recv_magic = 0;
-  bool is_broadcast = false;
-  int ret;
 
   vTaskDelay(5000 / portTICK_RATE_MS);
 
+   uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
+   uint8_t *response = (uint8_t *) malloc(1024);
+
   while (true) {
+    uart_write_bytes(UART_NUM_2, request, 8);
+    uart_wait_tx_done(UART_NUM_2, 40 / portTICK_RATE_MS);
+
+    int readed = uart_read_bytes(UART_NUM_2, response, 1024, 500 / portTICK_RATE_MS);
+    if (readed > 0) {
+      for(uint8_t i = 0; i < readed; i++) {
+        ESP_LOGI(TAG, "Received bit[%d]: %d", i, response[i]);
+      }
+    } else {
+        ESP_LOGI(TAG, "No response");
+    }
+
     esp_now_send(send_param_broadcast->dest_mac, send_param_broadcast->buffer,
                  send_param_broadcast->len);
-    while (xQueueReceive(s_espnow_queue, &evt, 1000) == pdTRUE) {
+    while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
       switch (evt.id) {
       case ESPNOW_SEND_CB: {
         espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-        is_broadcast = IS_BROADCAST_ADDR(send_cb->mac_addr);
-
-        ESP_LOGI(TAG, "Send data to " MACSTR ", status: %d",
-                 MAC2STR(send_cb->mac_addr), send_cb->status);
+        ESP_LOGI(TAG, "Send data to " MACSTR "", MAC2STR(send_cb->mac_addr));
 
         break;
       }
       case ESPNOW_RECV_CB: {
         espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-        ret = espnow_data_parse(recv_cb->data, recv_cb->data_len, &recv_state,
-                                &recv_seq, &recv_magic);
+
+        ESP_LOGI(TAG, "Received message from: " MACSTR " with lenght of: %d",
+                 MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
+        espnow_addpeer(recv_cb->mac_addr);
+
+        char *message = (char *)recv_cb->data;
+        ESP_LOGI(TAG, "Received message: %s", message);
+
         free(recv_cb->data);
-
-        ESP_LOGI(TAG, "Add peer: " MACSTR "", MAC2STR(recv_cb->mac_addr));
-
-        if (esp_now_is_peer_exist(recv_cb->mac_addr) == false) {
-          espnow_addpeer(recv_cb->mac_addr);
-        } else {
-          ESP_LOGI(TAG, "Peer is already added");
-        }
-
-        char message[] = "esp message 123 aaa";
-        int array_size_chars = sizeof(message) / sizeof(message[0]);
-        uint8_t array_bytes[array_size_chars];
-
-        for (int i = 0; i < array_size_chars; i++) {
-          array_bytes[i] = (uint8_t)message[i];
-        }
-        int array_size_bytes = sizeof(array_bytes);
-
-        espnow_send_param_t *send_param =
-            espnow_data_create(recv_cb->mac_addr, array_bytes, array_size_bytes);
-
-        esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len);
-
         break;
       }
       default:
@@ -132,23 +151,7 @@ static esp_err_t espnow_init_minimal(void) {
   ESP_ERROR_CHECK(esp_now_set_pmk((uint8_t *)ESPNOW_PMK));
 
   /* Add broadcast peer information to peer list. */
-  // malloc - Allocates size bytes of uninitialized storage.
-  esp_now_peer_info_t *peer = malloc(sizeof(esp_now_peer_info_t));
-  if (peer == NULL) {
-    ESP_LOGE(TAG, "Malloc peer information fail");
-    vSemaphoreDelete(s_espnow_queue);
-    esp_now_deinit();
-    return ESP_FAIL;
-  }
-
-  // https://en.cppreference.com/w/cpp/string/byte/memset
-  memset(peer, 0, sizeof(esp_now_peer_info_t));
-  peer->channel = ESPNOW_CHANNEL;
-  peer->ifidx = ESPNOW_WIFI_IF;
-  peer->encrypt = false;
-  memcpy(peer->peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
-  ESP_ERROR_CHECK(esp_now_add_peer(peer));
-  free(peer);
+  espnow_addpeer(s_broadcast_mac);
 
   // xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
 
@@ -185,23 +188,17 @@ void app_main(void) {
   printf("\n");
 
   espnow_init_minimal();
+  init_uart();
 
-  char message[] = "esp";
+  char message[] = "broadcast";
   int array_size_chars = sizeof(message) / sizeof(message[0]);
-  uint8_t array_bytes[array_size_chars];
+  uint8_t *array_bytes = (uint8_t *)message;
 
-  for (int i = 0; i < array_size_chars; i++) {
-    array_bytes[i] = (uint8_t)message[i];
-  }
-  int array_size_bytes = sizeof(array_bytes); // / sizeof(array_bytes[0]);
-
-  ESP_LOGI(TAG, "array_size_bytes: %d", array_size_bytes);
-
-  espnow_send_param_t *send_param =
-      espnow_data_create(s_broadcast_mac, array_bytes, array_size_bytes);
+  espnow_send *send_param =
+      espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
 
   xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
   ESP_LOGI(TAG, "created task");
 
-  // espnow_init_debug();
+
 }
