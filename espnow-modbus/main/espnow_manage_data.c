@@ -42,6 +42,12 @@ espnow_send *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN], uint8_t *array,
   // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_now.html
   // Length: The length is the total length of Organization Identifier, Type,
   // Version and Body.
+
+  if(array_length == 0)
+  {
+    ESP_LOGI(TAG, "Lenght to send is 0, esp now doesnt like it");
+  }
+
   send_param->len = array_length; // hmmmmmmm
   send_param->buffer = malloc(array_length);
   if (send_param->buffer == NULL) {

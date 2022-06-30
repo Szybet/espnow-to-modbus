@@ -27,29 +27,30 @@
 
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
+
+uint8_t data_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00};
 xQueueHandle s_espnow_queue;
 
 // static void espnow_deinit(espnow_send *send_param);
 
 void init_gpio() {
-  //zero-initialize the config structure.
-    gpio_config_t io_conf = {};
-    //disable interrupt
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    //set as output mode
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    //bit mask of the pins that you want to set,e.g.GPIO18/19
-    io_conf.pin_bit_mask = 1ULL<<GPIO_NUM_2;
-    //disable pull-down mode
-    io_conf.pull_down_en = 0;
-    //disable pull-up mode
-    io_conf.pull_up_en = 0;
-    //configure GPIO with the given settings
-    ESP_LOGI(TAG, "Before GPIO");
-    vTaskDelay(1500 / portTICK_RATE_MS);
-    //gpio_reset_pin(GPIO_NUM_2);
-    gpio_config(&io_conf);
-    ESP_LOGI(TAG, "Started GPIO");
+  // zero-initialize the config structure.
+  gpio_config_t io_conf = {};
+  // disable interrupt
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  // set as output mode
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  // bit mask of the pins that you want to set,e.g.GPIO18/19
+  io_conf.pin_bit_mask = 1ULL << GPIO_NUM_2;
+  // disable pull-down mode
+  io_conf.pull_down_en = 0;
+  // disable pull-up mode
+  io_conf.pull_up_en = 0;
+  // configure GPIO with the given settings
+
+  // gpio_reset_pin(GPIO_NUM_2);
+  gpio_config(&io_conf);
+  ESP_LOGI(TAG, "Started GPIO");
 }
 
 void init_uart() {
@@ -69,15 +70,15 @@ void init_uart() {
 #endif
   ESP_LOGI(TAG, "intr_alloc_flags %d", intr_alloc_flags);
   ESP_ERROR_CHECK(
-      uart_driver_install(UART_NUM_2, 256, 256, 0, NULL, intr_alloc_flags));
+      uart_driver_install(UART_NUM_2, 256, 0, 0, NULL, intr_alloc_flags));
 
   ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
 
   ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, 17, 16, -1, -1));
 
-  //ESP_ERROR_CHECK(uart_set_mode(UART_NUM_2, UART_MODE_RS485_HALF_DUPLEX));
+  // ESP_ERROR_CHECK(uart_set_mode(UART_NUM_2, UART_MODE_RS485_HALF_DUPLEX));
 
-  //ESP_ERROR_CHECK(uart_set_rx_timeout(UART_NUM_2, 3));
+  // ESP_ERROR_CHECK(uart_set_rx_timeout(UART_NUM_2, 3));
   ESP_LOGI(TAG, "Started uart");
 }
 
@@ -113,16 +114,29 @@ static void espnow_task(void *pvParameter) {
 
   vTaskDelay(5000 / portTICK_RATE_MS);
 
-   uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
+  uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
 
   while (true) {
 
-    uart_send_data(*request, 8);
+    uart_send_data(request, 8);
 
-    uint8_t* received_data = uart_receive_data();
+    uint8_t received_data[250];
 
-    esp_now_send(send_param_broadcast->dest_mac, send_param_broadcast->buffer,
-                 send_param_broadcast->len);
+    int received_data_len = uart_receive_data(received_data, 250);
+
+    if (received_data_len > 0) {
+
+      for (int i = 0; i < received_data_len; i++) {
+        ESP_LOGI(TAG, "Byte %d: %d", i, (int)received_data[i]);
+      }
+
+      espnow_send *send_param_uart_data =
+          espnow_data_create(data_mac, received_data, received_data_len);
+
+      esp_now_send(send_param_uart_data->dest_mac, send_param_uart_data->buffer,
+                   send_param_uart_data->len);
+    }
+    // free(*received_data);
 
     while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
       switch (evt.id) {

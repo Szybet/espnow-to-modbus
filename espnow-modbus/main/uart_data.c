@@ -28,22 +28,25 @@
 void uart_send_data(uint8_t *data_to_send, int data_size) {
   gpio_set_level(GPIO_NUM_2, 1);
 
-  uart_write_bytes(UART_NUM_2, *data_to_send, data_size);
-  uart_wait_tx_done(UART_NUM_2, 5 / portTICK_RATE_MS);
+  vTaskDelay(100 / portTICK_RATE_MS);
+
+  uart_write_bytes(UART_NUM_2, data_to_send, data_size);
+  uart_wait_tx_done(UART_NUM_2, 20 / portTICK_RATE_MS);
 
   gpio_set_level(GPIO_NUM_2, 0);
 }
 
-uint8_t* uart_receive_data() {
+size_t uart_receive_data(uint8_t *buffer, size_t buffer_size) {
 
-  uint8_t *response = (uint8_t *)malloc(512);
+  //uint8_t *response = (uint8_t *)malloc(256);
 
   int readed =
-      uart_read_bytes(UART_NUM_2, response, 512, 500 / portTICK_RATE_MS);
+      uart_read_bytes(UART_NUM_2, buffer, buffer_size, 500 / portTICK_RATE_MS);
   if (readed > 0) {
     ESP_LOGI(TAG, "Received %d bytes of data from uart", readed);
   } else {
     ESP_LOGI(TAG, "No response from uart");
+    return 0;
   }
-  return response;
+  return readed;
 }
