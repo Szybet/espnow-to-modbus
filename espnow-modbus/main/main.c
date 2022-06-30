@@ -18,15 +18,39 @@
 #include "driver/uart.h"
 #include "sdkconfig.h"
 
+#include "driver/gpio.h"
+
 #include "debug.h"
 #include "espnow_manage_data.h"
 #include "main_settings.h"
+#include "uart_data.h"
 
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
 xQueueHandle s_espnow_queue;
 
 // static void espnow_deinit(espnow_send *send_param);
+
+void init_gpio() {
+  //zero-initialize the config structure.
+    gpio_config_t io_conf = {};
+    //disable interrupt
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    //bit mask of the pins that you want to set,e.g.GPIO18/19
+    io_conf.pin_bit_mask = 1ULL<<GPIO_NUM_2;
+    //disable pull-down mode
+    io_conf.pull_down_en = 0;
+    //disable pull-up mode
+    io_conf.pull_up_en = 0;
+    //configure GPIO with the given settings
+    ESP_LOGI(TAG, "Before GPIO");
+    vTaskDelay(1500 / portTICK_RATE_MS);
+    //gpio_reset_pin(GPIO_NUM_2);
+    gpio_config(&io_conf);
+    ESP_LOGI(TAG, "Started GPIO");
+}
 
 void init_uart() {
   uart_config_t uart_config = {
@@ -49,11 +73,12 @@ void init_uart() {
 
   ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
 
-  ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, 17, 16, 2, -1));
+  ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, 17, 16, -1, -1));
 
   //ESP_ERROR_CHECK(uart_set_mode(UART_NUM_2, UART_MODE_RS485_HALF_DUPLEX));
 
   //ESP_ERROR_CHECK(uart_set_rx_timeout(UART_NUM_2, 3));
+  ESP_LOGI(TAG, "Started uart");
 }
 
 // Manage Wifi
@@ -89,23 +114,16 @@ static void espnow_task(void *pvParameter) {
   vTaskDelay(5000 / portTICK_RATE_MS);
 
    uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
-   uint8_t *response = (uint8_t *) malloc(1024);
 
   while (true) {
-    uart_write_bytes(UART_NUM_2, request, 8);
-    uart_wait_tx_done(UART_NUM_2, 40 / portTICK_RATE_MS);
 
-    int readed = uart_read_bytes(UART_NUM_2, response, 1024, 500 / portTICK_RATE_MS);
-    if (readed > 0) {
-      for(uint8_t i = 0; i < readed; i++) {
-        ESP_LOGI(TAG, "Received bit[%d]: %d", i, response[i]);
-      }
-    } else {
-        ESP_LOGI(TAG, "No response");
-    }
+    uart_send_data(*request, 8);
+
+    uint8_t* received_data = uart_receive_data();
 
     esp_now_send(send_param_broadcast->dest_mac, send_param_broadcast->buffer,
                  send_param_broadcast->len);
+
     while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
       switch (evt.id) {
       case ESPNOW_SEND_CB: {
@@ -188,7 +206,10 @@ void app_main(void) {
   printf("\n");
 
   espnow_init_minimal();
+  vTaskDelay(1500 / portTICK_RATE_MS);
   init_uart();
+  vTaskDelay(1500 / portTICK_RATE_MS);
+  init_gpio();
 
   char message[] = "broadcast";
   int array_size_chars = sizeof(message) / sizeof(message[0]);
@@ -199,6 +220,4 @@ void app_main(void) {
 
   xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
   ESP_LOGI(TAG, "created task");
-
-
 }
