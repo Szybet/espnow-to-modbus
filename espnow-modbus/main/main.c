@@ -48,8 +48,9 @@ void init_gpio() {
   io_conf.pull_up_en = 0;
   // configure GPIO with the given settings
 
-  // gpio_reset_pin(GPIO_NUM_2);
+  gpio_reset_pin(GPIO_NUM_2);
   gpio_config(&io_conf);
+  gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
   ESP_LOGI(TAG, "Started GPIO");
 }
 
