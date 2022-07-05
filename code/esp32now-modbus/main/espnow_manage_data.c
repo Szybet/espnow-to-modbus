@@ -57,7 +57,7 @@ espnow_send *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN], uint8_t *array,
     esp_now_deinit();
     // return ESP_FAIL;
   }
-  memcpy(send_param->buffer, array, send_param->len);
+  memcpy(send_param->buffer, array, array_length);
   memcpy(send_param->dest_mac, mac, ESP_NOW_ETH_ALEN);
   return send_param;
 }
@@ -136,7 +136,10 @@ void espnow_addpeer(uint8_t *mac) {
 }
 
 void espnow_send_smarter(espnow_send *data) {
+  ESP_LOGI(TAG, "Sending espnow to: " MACSTR " with length: %d", MAC2STR(data->dest_mac), data->len);
+
   esp_now_send(data->dest_mac, data->buffer, data->len);
+  free(data->buffer);
 }
 
 // old

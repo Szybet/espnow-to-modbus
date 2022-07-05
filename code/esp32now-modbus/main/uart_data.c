@@ -38,12 +38,12 @@ void uart_send_data(uint8_t *data_to_send, int data_size) {
   //vTaskDelay(100 / portTICK_RATE_MS);
 }
 
-size_t uart_receive_data(uint8_t *buffer, size_t buffer_size) {
+size_t uart_receive_data(uint8_t *buffer, size_t buffer_size, int timeout) {
 
   //uint8_t *response = (uint8_t *)malloc(256);
 
   int readed =
-      uart_read_bytes(UART_NUM_2, buffer, buffer_size, 300 / portTICK_RATE_MS);
+      uart_read_bytes(UART_NUM_2, buffer, buffer_size, timeout / portTICK_RATE_MS);
   if (readed > 0) {
     ESP_LOGI(TAG, "Received %d bytes of data from uart", readed);
   } else {

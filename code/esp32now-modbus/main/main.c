@@ -23,12 +23,12 @@
 #include "debug.h"
 #include "espnow_manage_data.h"
 #include "main_settings.h"
+#include "modbus_esp.h"
 #include "uart_data.h"
+#include "espnow_esp.h"
 
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
-
-uint8_t data_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00};
 xQueueHandle s_espnow_queue;
 
 // static void espnow_deinit(espnow_send *send_param);
@@ -56,9 +56,10 @@ void init_gpio() {
 
 void init_uart() {
   uart_config_t uart_config = {
-      .baud_rate = 1200,
+      //.baud_rate = 1200,
+      .baud_rate = 9600,
       .data_bits = UART_DATA_8_BITS,
-      .parity = UART_PARITY_EVEN,
+      .parity = UART_PARITY_DISABLE,
       .stop_bits = UART_STOP_BITS_1,
       .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
       //.rx_flow_ctrl_thresh = 122,
@@ -103,71 +104,6 @@ void espnow_deinit_func(espnow_send *send_param) {
   esp_now_deinit();
 }
 
-// Manage wifi end
-
-// Use espnow
-
-static void espnow_task(void *pvParameter) {
-  espnow_send *send_param_broadcast =
-      (espnow_send *)pvParameter; // this is broadcast always
-
-  espnow_event_t evt;
-
-  vTaskDelay(5000 / portTICK_RATE_MS);
-
-  uint8_t request[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
-
-  while (true) {
-
-    uart_send_data(request, 8);
-
-    uint8_t received_data[250];
-
-    int received_data_len = uart_receive_data(received_data, 250);
-
-    if (received_data_len > 0) {
-
-      for (int i = 0; i < received_data_len; i++) {
-        ESP_LOGI(TAG, "Byte %d: %d", i, (int)received_data[i]);
-      }
-
-      espnow_send *send_param_uart_data =
-          espnow_data_create(data_mac, received_data, received_data_len);
-
-      esp_now_send(send_param_uart_data->dest_mac, send_param_uart_data->buffer,
-                   send_param_uart_data->len);
-    }
-    // free(*received_data);
-
-    while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
-      switch (evt.id) {
-      case ESPNOW_SEND_CB: {
-        espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-        ESP_LOGI(TAG, "Send data to " MACSTR "", MAC2STR(send_cb->mac_addr));
-
-        break;
-      }
-      case ESPNOW_RECV_CB: {
-        espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-
-        ESP_LOGI(TAG, "Received message from: " MACSTR " with lenght of: %d",
-                 MAC2STR(recv_cb->mac_addr), recv_cb->data_len);
-        espnow_addpeer(recv_cb->mac_addr);
-
-        char *message = (char *)recv_cb->data;
-        ESP_LOGI(TAG, "Received message: %s", message);
-
-        free(recv_cb->data);
-        break;
-      }
-      default:
-        ESP_LOGI(TAG, "Callback type error: %d", evt.id);
-        break;
-      }
-    }
-  }
-}
-
 static esp_err_t espnow_init_minimal(void) {
   s_espnow_queue = xQueueCreate(ESPNOW_QUEUE_SIZE, sizeof(espnow_event_t));
   if (s_espnow_queue == NULL) {
@@ -191,8 +127,6 @@ static esp_err_t espnow_init_minimal(void) {
   ESP_LOGI(TAG, "Exiting espnow minimal init");
   return ESP_OK;
 }
-
-// Use espnow end
 
 void app_main(void) {
   // Initialize NVS
@@ -226,13 +160,26 @@ void app_main(void) {
   vTaskDelay(1500 / portTICK_RATE_MS);
   init_gpio();
 
-  char message[] = "broadcast";
+  char message[] = "111 broadcast 111";
   int array_size_chars = sizeof(message) / sizeof(message[0]);
   uint8_t *array_bytes = (uint8_t *)message;
 
   espnow_send *send_param =
       espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
 
-  xTaskCreate(espnow_task, "espnow_task", 2048, send_param, 4, NULL);
-  ESP_LOGI(TAG, "created task");
+  bool modbus_communication_bool = false;
+  bool espnow_esp_bool = true;
+
+  if (modbus_communication_bool == true) {
+    xTaskCreate(modbus_communication, "modbus_communication", 16384, send_param,
+                4, NULL);
+
+    ESP_LOGI(TAG, "created task - modbus communication");
+  } else if(espnow_esp_bool == true)
+  {
+    xTaskCreate(espnow_communication, "espnow_communication", 16384, send_param,
+                4, NULL);
+
+    ESP_LOGI(TAG, "created task - espnow communication");
+  }
 }
