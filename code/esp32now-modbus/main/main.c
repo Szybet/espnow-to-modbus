@@ -21,11 +21,11 @@
 #include "driver/gpio.h"
 
 #include "debug.h"
+#include "espnow_esp.h"
 #include "espnow_manage_data.h"
 #include "main_settings.h"
 #include "modbus_esp.h"
 #include "uart_data.h"
-#include "espnow_esp.h"
 
 uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF,
                                              0xFF, 0xFF, 0xFF};
@@ -175,8 +175,7 @@ void app_main(void) {
                 4, NULL);
 
     ESP_LOGI(TAG, "created task - modbus communication");
-  } else if(espnow_esp_bool == true)
-  {
+  } else if (espnow_esp_bool == true) {
     xTaskCreate(espnow_communication, "espnow_communication", 16384, send_param,
                 4, NULL);
 

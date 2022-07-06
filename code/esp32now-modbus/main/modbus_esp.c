@@ -65,7 +65,7 @@ void modbus_communication(void *pvParameter) {
 
         uint8_t received_data[250];
 
-        int received_data_len = uart_receive_data(received_data, 250, 300);
+        int received_data_len = uart_receive_data(received_data, sizeof(received_data), 2000, 100);
 
         if (received_data_len > 0) {
 

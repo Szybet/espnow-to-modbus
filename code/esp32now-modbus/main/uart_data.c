@@ -32,23 +32,50 @@ void uart_send_data(uint8_t *data_to_send, int data_size) {
   uart_write_bytes(UART_NUM_2, data_to_send, data_size);
   uart_wait_tx_done(UART_NUM_2, 5000 / portTICK_RATE_MS);
 
-  //vTaskDelay(5 / portTICK_RATE_MS);
+  // vTaskDelay(5 / portTICK_RATE_MS);
 
   ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_2, 0));
-  //vTaskDelay(100 / portTICK_RATE_MS);
+  // vTaskDelay(100 / portTICK_RATE_MS);
 }
 
-size_t uart_receive_data(uint8_t *buffer, size_t buffer_size, int timeout) {
+size_t uart_receive_data(uint8_t *buffer, size_t buffer_size,
+                         int packet_timeout, int byte_timeout) {
 
-  //uint8_t *response = (uint8_t *)malloc(256);
+  size_t readed = 0;
+  size_t current_timeout = packet_timeout;
+  while (readed < buffer_size) {
+    int current_read = uart_read_bytes(UART_NUM_2, &buffer[readed], 1,
+                                       current_timeout / portTICK_RATE_MS);
+    if (current_read > 0) {
+      current_timeout = byte_timeout;
+      readed++;
+    } else {
+      break;
+    }
+  }
 
-  int readed =
-      uart_read_bytes(UART_NUM_2, buffer, buffer_size, timeout / portTICK_RATE_MS);
   if (readed > 0) {
     ESP_LOGI(TAG, "Received %d bytes of data from uart", readed);
   } else {
     ESP_LOGI(TAG, "No response from uart");
-    return 0;
   }
   return readed;
 }
+
+/*
+
+  size_t readed = 0;
+
+  Serial.setTimeout(1000);
+  while(readed < buffer_size) {
+    int current_read = Serial.readBytes(&buffer[readed], 1);
+    if (current_read > 0) {
+      Serial.setTimeout(50);
+      readed++;
+    } else {
+      break;
+    }
+  }
+  return readed;
+
+*/

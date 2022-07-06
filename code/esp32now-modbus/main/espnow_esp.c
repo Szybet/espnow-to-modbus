@@ -37,12 +37,23 @@ void espnow_communication(void *pvParameter) {
 
   vTaskDelay(5000 / portTICK_RATE_MS);
 
+  bool sended = false;
+
   while (true) {
     uint8_t received_data[250];
+    int received_data_len = 0;
+    if (sended) {
+      received_data_len = uart_receive_data(received_data, 250, 10, 10);
+      if (received_data_len > 0) {
+        ESP_LOGI(TAG, "Got uart data while waiting for espnow response: %d", received_data_len);
+        received_data_len += uart_receive_data(&received_data[received_data_len], 250 - received_data_len, 2000, 100);
+        sended = false;
+      }
+    } else {
+      received_data_len = uart_receive_data(received_data, 250, 2000, 100);
+    }
 
-    int received_data_len = uart_receive_data(received_data, 250, 50);
-
-    if (received_data_len >= 8) {
+    if (received_data_len > 0) {
       ESP_LOGI(TAG, "Received data from uart: %d", received_data_len);
 
       for (int i = 0; i < received_data_len; i++) {
@@ -54,9 +65,8 @@ void espnow_communication(void *pvParameter) {
 
       ESP_LOGI(TAG, "Sending Data to espnow");
       espnow_send_smarter(send_param_uart_data);
-    }
-    if (received_data_len > 0 and received_data_len < 8) {
-      ESP_LOGI(TAG, "Received crap");
+
+      sended = true;
     }
 
     while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
@@ -82,6 +92,7 @@ void espnow_communication(void *pvParameter) {
         uart_send_data(recv_cb->data, recv_cb->data_len);
 
         free(recv_cb->data);
+        sended = false;
         break;
       }
       default:

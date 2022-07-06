@@ -4,7 +4,7 @@
 #define ESPNOW_WIFI_MODE WIFI_MODE_STA
 #define ESPNOW_WIFI_IF ESP_IF_WIFI_STA
 
-#define ESPNOW_QUEUE_SIZE 10
+#define ESPNOW_QUEUE_SIZE 1
 
 extern uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN];
 extern uint16_t s_espnow_seq[2];

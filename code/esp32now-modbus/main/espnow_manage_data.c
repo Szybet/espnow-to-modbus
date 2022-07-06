@@ -84,7 +84,7 @@ void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
   evt.id = ESPNOW_SEND_CB;
   memcpy(send_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-  if (xQueueSend(s_espnow_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
+  if (xQueueOverwrite(s_espnow_queue, &evt) != pdTRUE) {
     ESP_LOGW(TAG, "Send send queue fail");
   }
 }
@@ -107,7 +107,7 @@ void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   }
   memcpy(recv_cb->data, data, len);
   recv_cb->data_len = len;
-  if (xQueueSend(s_espnow_queue, &evt, ESPNOW_MAXDELAY) != pdTRUE) {
+  if (xQueueOverwrite(s_espnow_queue, &evt) != pdTRUE) {
     ESP_LOGW(TAG, "Send receive queue fail");
     free(recv_cb->data);
   }
