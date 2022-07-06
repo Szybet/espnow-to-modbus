@@ -59,10 +59,10 @@ void modbus_communication(void *pvParameter) {
     if (uart_count > 0 &&
         ((esp_timer_get_time() - uart_last_read) > UART_TIMEOUT ||
          uart_count == sizeof(uart_buffer))) {
-          espnow_send *send_param_uart_data = espnow_data_create(
-              last_mac_addr, uart_buffer, uart_count);
+      espnow_send *send_param_uart_data =
+          espnow_data_create(last_mac_addr, uart_buffer, uart_count);
 
-          espnow_send_smarter(send_param_uart_data);
+      espnow_send_smarter(send_param_uart_data);
       uart_count = 0;
     }
 
@@ -92,7 +92,7 @@ void modbus_communication(void *pvParameter) {
 
         uart_send_data(recv_cb->data, recv_cb->data_len);
 
-        memcpy(last_mac_addr, recv_cb->mac_addr);
+        memcpy(last_mac_addr, recv_cb->mac_addr, ESP_NOW_ETH_ALEN);
         free(recv_cb->data);
         break;
       }

@@ -167,8 +167,8 @@ void app_main(void) {
   espnow_send *send_param =
       espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
 
-  bool modbus_communication_bool = false;
-  bool espnow_esp_bool = true;
+  bool modbus_communication_bool = true;
+  bool espnow_esp_bool = false;
 
   if (modbus_communication_bool == true) {
     xTaskCreate(modbus_communication, "modbus_communication", 16384, send_param,
