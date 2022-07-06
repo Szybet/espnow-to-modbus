@@ -36,10 +36,37 @@ void modbus_communication(void *pvParameter) {
 
   vTaskDelay(5000 / portTICK_RATE_MS);
 
-  while (true) {
-    ESP_LOGI(TAG, "Waiting for espnow data");
+  int64_t uart_last_read = esp_timer_get_time();
+  uint8_t uart_count = 0;
+  uint8_t uart_buffer[255];
 
-    while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
+  uint8_t last_mac_addr[ESP_NOW_ETH_ALEN];
+
+  while (true) {
+    size_t uart_available = 0;
+    ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &uart_available));
+    if (uart_available + uart_count > sizeof(uart_buffer)) {
+      uart_available = uart_available - (sizeof(uart_buffer) - uart_count);
+    }
+
+    if (uart_available > 0) {
+      uart_read_bytes(UART_NUM_2, &uart_buffer[uart_count], uart_available,
+                      100);
+      uart_count += uart_available;
+      uart_last_read = esp_timer_get_time();
+    }
+
+    if (uart_count > 0 &&
+        ((esp_timer_get_time() - uart_last_read) > UART_TIMEOUT ||
+         uart_count == sizeof(uart_buffer))) {
+          espnow_send *send_param_uart_data = espnow_data_create(
+              last_mac_addr, uart_buffer, uart_count);
+
+          espnow_send_smarter(send_param_uart_data);
+      uart_count = 0;
+    }
+
+    while (xQueueReceive(s_espnow_queue, &evt, 5) == pdTRUE) {
       switch (evt.id) {
       case ESPNOW_SEND_CB: {
         espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
@@ -65,26 +92,7 @@ void modbus_communication(void *pvParameter) {
 
         uart_send_data(recv_cb->data, recv_cb->data_len);
 
-        uint8_t received_data[250];
-
-        int received_data_len =
-            uart_receive_data(received_data, sizeof(received_data), 2000, 100);
-
-        if (received_data_len > 0) {
-
-          if (BYTE_LOGS == true) {
-            for (int i = 0; i < received_data_len; i++) {
-              ESP_LOGI(TAG, "Received %d byte: %02X", i, received_data[i]);
-            }
-          }
-
-          espnow_send *send_param_uart_data = espnow_data_create(
-              recv_cb->mac_addr, received_data, received_data_len);
-
-          espnow_send_smarter(send_param_uart_data);
-        } else {
-          ESP_LOGI(TAG, "No data received from uart");
-        }
+        memcpy(last_mac_addr, recv_cb->mac_addr);
         free(recv_cb->data);
         break;
       }
