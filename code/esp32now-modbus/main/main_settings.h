@@ -32,6 +32,8 @@ extern xQueueHandle s_espnow_queue;
 // "Send len"
 //range 10 250
 
+#define UART_TIMEOUT 200
+
 typedef enum
 {
     ESPNOW_SEND_CB,
