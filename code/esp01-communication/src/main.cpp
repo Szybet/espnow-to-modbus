@@ -13,7 +13,18 @@ SoftwareSerial logSerial(13, 2);
 uint8_t ExampleRequest[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
 
 WiFiServer server(5000);
-WiFiClient client;
+WiFiClient tcp_client;
+
+#define TCP_TIMEOUT 100
+#define SERIAL_TIMEOUT 100
+
+unsigned long serial_last_read = 0;
+uint8_t serial_count = 0;
+uint8_t serial_buffer[255];
+
+unsigned long tcp_last_read = 0;
+uint8_t tcp_count = 0;
+uint8_t tcp_buffer[255];
 
 void setup() {
   Serial.begin(9600);
@@ -39,73 +50,40 @@ void setup() {
 size_t read_serial(uint8_t *buffer, size_t buffer_size);
 
 void loop() {
-  if (!client) {
-    client = server.available();
+  if (!tcp_client) {
+    tcp_client = server.available();
   }
 
-  if (client) {
-    if (client.available() > 0) {
-      int readClient = client.available();
-      logSerial.print("Available are ");
-      logSerial.print(readClient);
-      logSerial.println(" Bytes to read from client");
-
-      if (readClient >= 8) {
-        uint8_t tcpBytes[255];
-        // reading those bytes
-        bool reading = true;
-        int count = 0;
-        while (reading == true) {
-          int32_t readedByte = client.read();
-          if (readedByte != -1) {
-            tcpBytes[count] = readedByte;
-          } else {
-            reading = false;
-          }
-          count = count + 1;
-        }
-        logSerial.print("Received: ");
-        for (int i = 0; i < readClient; i++) {
-          logSerial.print(tcpBytes[i], HEX);
-          logSerial.print(" ");
-        }
-        logSerial.println("");
-
-        logSerial.println("Sending to uart");
-        Serial.write(tcpBytes, readClient);
-        Serial.flush();
-
-        uint8_t received_data[255];
-        size_t readed = read_serial(received_data, sizeof(received_data));
-
-        if (readed > 0) {
-          logSerial.print("Readed ");
-          logSerial.print(readed);
-          logSerial.println(" bytes from uart ");
-          for(uint8_t i = 0; i < readed; i++) {
-            client.write(received_data[i]);
-          }
-          logSerial.println("sended to tcp");
-        } else {
-          logSerial.println("No data from uart");
-        }
-      }
+  if (tcp_client) {
+    size_t tcp_available = tcp_client.available();
+    if (tcp_available + tcp_count > sizeof(tcp_buffer)) {
+      tcp_available = tcp_available - (sizeof(tcp_buffer) - tcp_count);
+    }
+    if (tcp_available > 0) {
+      tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available)
+      tcp_count += tcp_available;
+      tcp_last_read = milis();
     }
   }
-}
 
-size_t read_serial(uint8_t *buffer, size_t buffer_size) {
-  size_t readed = 0;
-  
-  Serial.setTimeout(4000);
-  while(readed < buffer_size) {
-    int current_read = Serial.readBytes(&buffer[readed], 1);
-    if (current_read > 0) {
-      Serial.setTimeout(100);
-      readed++;
-    } else {
-      break;
-    }
+  if (tcp_count > 0 && ((milis() - tcp_last_read) > TCP_TIMEOUT || tcp_count == sizeof(tcp_buffer))) {
+    Serial.write(tcp_buffer, tcp_count);
+    tcp_count = 0;
   }
-  return readed;
+
+  size_t serial_available = Serial.available();
+  if (serial_available + serial_count > sizeof(serial_buffer)) {
+      serial_available = serial_available - (sizeof(serial_buffer) - serial_count);
+  }
+
+  if (serial_available > 0) {
+    Serial.readBytes(&serial_buffer[serial_count], serial_available);
+    serial_count += serial_available;
+    serial_last_read = milis();
+  }
+
+  if (serial_count > 0 && ((milis() - serial_last_read) > SERIAL_TIMEOUT || serial_count == sizeof(serial_buffer))) {
+    Serial.write(serial_buffer, serial_count);
+    serial_count = 0;
+  }
 }
