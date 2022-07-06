@@ -38,7 +38,7 @@ void modbus_communication(void *pvParameter) {
 
   while (true) {
     ESP_LOGI(TAG, "Waiting for espnow data");
-    
+
     while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
       switch (evt.id) {
       case ESPNOW_SEND_CB: {
@@ -55,8 +55,10 @@ void modbus_communication(void *pvParameter) {
 
         espnow_addpeer(recv_cb->mac_addr);
 
-        for (int i = 0; i < recv_cb->data_len; i++) {
-          ESP_LOGI(TAG, "Received %d byte: %02X", i, recv_cb->data[i]);
+        if (BYTE_LOGS == true) {
+          for (int i = 0; i < recv_cb->data_len; i++) {
+            ESP_LOGI(TAG, "Received %d byte: %02X", i, recv_cb->data[i]);
+          }
         }
 
         ESP_LOGI(TAG, "Sending to uart");
@@ -65,16 +67,19 @@ void modbus_communication(void *pvParameter) {
 
         uint8_t received_data[250];
 
-        int received_data_len = uart_receive_data(received_data, sizeof(received_data), 2000, 100);
+        int received_data_len =
+            uart_receive_data(received_data, sizeof(received_data), 2000, 100);
 
         if (received_data_len > 0) {
 
-          for (int i = 0; i < received_data_len; i++) {
-            ESP_LOGI(TAG, "Received %d byte: %02X", i, received_data[i]);
+          if (BYTE_LOGS == true) {
+            for (int i = 0; i < received_data_len; i++) {
+              ESP_LOGI(TAG, "Received %d byte: %02X", i, received_data[i]);
+            }
           }
 
-          espnow_send *send_param_uart_data =
-              espnow_data_create(recv_cb->mac_addr, received_data, received_data_len);
+          espnow_send *send_param_uart_data = espnow_data_create(
+              recv_cb->mac_addr, received_data, received_data_len);
 
           espnow_send_smarter(send_param_uart_data);
         } else {

@@ -41,7 +41,6 @@ void espnow_communication(void *pvParameter) {
   uint8_t uart_count = 0;
   uint8_t uart_buffer[255];
 
-
   while (true) {
     size_t uart_available = 0;
     ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &uart_available));
@@ -50,14 +49,17 @@ void espnow_communication(void *pvParameter) {
     }
 
     if (uart_available > 0) {
-      uart_read_bytes(UART_NUM_2, &uart_buffer[uart_count], uart_available, 100);
+      uart_read_bytes(UART_NUM_2, &uart_buffer[uart_count], uart_available,
+                      100);
       uart_count += uart_available;
       uart_last_read = esp_timer_get_time();
     }
 
-    if (uart_count > 0 && ((esp_timer_get_time() - uart_last_read) > UART_TIMEOUT || uart_count == sizeof(uart_buffer))) {
+    if (uart_count > 0 &&
+        ((esp_timer_get_time() - uart_last_read) > UART_TIMEOUT ||
+         uart_count == sizeof(uart_buffer))) {
       espnow_send *send_param_uart_data = espnow_data_create(
-          send_param_broadcast->dest_mac, received_data, received_data_len);
+          send_param_broadcast->dest_mac, uart_buffer, uart_count);
 
       ESP_LOGI(TAG, "Sending Data to espnow");
       espnow_send_smarter(send_param_uart_data);
@@ -80,14 +82,15 @@ void espnow_communication(void *pvParameter) {
 
         espnow_addpeer(recv_cb->mac_addr);
 
-        for (int i = 0; i < recv_cb->data_len; i++) {
-          ESP_LOGI(TAG, "Received %d byte: %02X", i, recv_cb->data[i]);
+        if (BYTE_LOGS == true) {
+          for (int i = 0; i < recv_cb->data_len; i++) {
+            ESP_LOGI(TAG, "Received %d byte: %02X", i, recv_cb->data[i]);
+          }
         }
-
+        
         uart_send_data(recv_cb->data, recv_cb->data_len);
 
         free(recv_cb->data);
-        sended = false;
         break;
       }
       default:

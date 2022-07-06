@@ -16,7 +16,7 @@ WiFiServer server(5000);
 WiFiClient tcp_client;
 
 #define TCP_TIMEOUT 100
-#define SERIAL_TIMEOUT 100
+#define SERIAL_TIMEOUT 200
 
 unsigned long serial_last_read = 0;
 uint8_t serial_count = 0;
@@ -60,13 +60,13 @@ void loop() {
       tcp_available = tcp_available - (sizeof(tcp_buffer) - tcp_count);
     }
     if (tcp_available > 0) {
-      tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available)
+      tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available);
       tcp_count += tcp_available;
-      tcp_last_read = milis();
+      tcp_last_read = millis();
     }
   }
 
-  if (tcp_count > 0 && ((milis() - tcp_last_read) > TCP_TIMEOUT || tcp_count == sizeof(tcp_buffer))) {
+  if (tcp_count > 0 && ((millis() - tcp_last_read) > TCP_TIMEOUT || tcp_count == sizeof(tcp_buffer))) {
     Serial.write(tcp_buffer, tcp_count);
     tcp_count = 0;
   }
@@ -79,11 +79,11 @@ void loop() {
   if (serial_available > 0) {
     Serial.readBytes(&serial_buffer[serial_count], serial_available);
     serial_count += serial_available;
-    serial_last_read = milis();
+    serial_last_read = millis();
   }
 
-  if (serial_count > 0 && ((milis() - serial_last_read) > SERIAL_TIMEOUT || serial_count == sizeof(serial_buffer))) {
-    Serial.write(serial_buffer, serial_count);
+  if (serial_count > 0 && ((millis() - serial_last_read) > SERIAL_TIMEOUT || serial_count == sizeof(serial_buffer))) {
+    tcp_client.write(serial_buffer, serial_count);
     serial_count = 0;
   }
 }
