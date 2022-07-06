@@ -37,39 +37,34 @@ void espnow_communication(void *pvParameter) {
 
   vTaskDelay(5000 / portTICK_RATE_MS);
 
-  bool sended = false;
+  int64_t uart_last_read = esp_timer_get_time();
+  uint8_t uart_count = 0;
+  uint8_t uart_buffer[255];
+
 
   while (true) {
-    uint8_t received_data[250];
-    int received_data_len = 0;
-    if (sended) {
-      received_data_len = uart_receive_data(received_data, 250, 10, 10);
-      if (received_data_len > 0) {
-        ESP_LOGI(TAG, "Got uart data while waiting for espnow response: %d", received_data_len);
-        received_data_len += uart_receive_data(&received_data[received_data_len], 250 - received_data_len, 2000, 100);
-        sended = false;
-      }
-    } else {
-      received_data_len = uart_receive_data(received_data, 250, 2000, 100);
+    size_t uart_available = 0;
+    ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &uart_available));
+    if (uart_available + uart_count > sizeof(uart_buffer)) {
+      uart_available = uart_available - (sizeof(uart_buffer) - uart_count);
     }
 
-    if (received_data_len > 0) {
-      ESP_LOGI(TAG, "Received data from uart: %d", received_data_len);
+    if (uart_available > 0) {
+      uart_read_bytes(UART_NUM_2, &uart_buffer[uart_count], uart_available, 100);
+      uart_count += uart_available;
+      uart_last_read = esp_timer_get_time();
+    }
 
-      for (int i = 0; i < received_data_len; i++) {
-        ESP_LOGI(TAG, "Received %d byte: %02X", i, received_data[i]);
-      }
-
+    if (uart_count > 0 && ((esp_timer_get_time() - uart_last_read) > UART_TIMEOUT || uart_count == sizeof(uart_buffer))) {
       espnow_send *send_param_uart_data = espnow_data_create(
           send_param_broadcast->dest_mac, received_data, received_data_len);
 
       ESP_LOGI(TAG, "Sending Data to espnow");
       espnow_send_smarter(send_param_uart_data);
-
-      sended = true;
+      uart_count = 0;
     }
 
-    while (xQueueReceive(s_espnow_queue, &evt, 100) == pdTRUE) {
+    while (xQueueReceive(s_espnow_queue, &evt, 5) == pdTRUE) {
       switch (evt.id) {
       case ESPNOW_SEND_CB: {
         espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
