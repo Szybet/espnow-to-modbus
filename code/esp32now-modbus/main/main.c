@@ -169,7 +169,7 @@ void app_main(void) {
   // If the TWDT was not initialized automatically on startup, manually
   // intialize it now
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 70000,
+      .timeout_ms = 45000,
       .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Bitmask of all cores
       .trigger_panic = true, // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/kconfig.html#config-esp-system-panic
   };
