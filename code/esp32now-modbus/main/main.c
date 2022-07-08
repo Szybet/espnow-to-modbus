@@ -160,25 +160,33 @@ void app_main(void) {
   vTaskDelay(1500 / portTICK_RATE_MS);
   init_gpio();
 
-  char message[] = "111 broadcast 111";
-  int array_size_chars = sizeof(message) / sizeof(message[0]);
-  uint8_t *array_bytes = (uint8_t *)message;
+// https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/wdts.html#task-watchdog-timer-twdt
+// Idk if needed:
+// https://github.com/espressif/esp-idf/blob/495d35949d50033ebcb89def98f107aa267388c0/examples/system/task_watchdog/main/task_watchdog_example_main.c#L43
 
-  espnow_send *send_param =
-      espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
+// Initialize watchdog
+#if !CONFIG_ESP_TASK_WDT
+  // If the TWDT was not initialized automatically on startup, manually
+  // intialize it now
+  esp_task_wdt_config_t twdt_config = {
+      .timeout_ms = 70000,
+      .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Bitmask of all cores
+      .trigger_panic = true, // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/kconfig.html#config-esp-system-panic
+  };
+  ESP_ERROR_CHECK(esp_task_wdt_init(&twdt_config));
+  ESP_LOGI(TAG, "TWDT initialized");
+#endif
 
-  bool modbus_communication_bool = true;
-  bool espnow_esp_bool = false;
+  bool modbus_communication_bool = false;
+  bool espnow_esp_bool = true;
 
   if (modbus_communication_bool == true) {
-    xTaskCreate(modbus_communication, "modbus_communication", 16384, send_param,
-                4, NULL);
-
+    xTaskCreatePinnedToCore(modbus_communication, "modbus_communication", 32768,
+                            xTaskGetCurrentTaskHandle(), 10, NULL, 0);
     ESP_LOGI(TAG, "created task - modbus communication");
   } else if (espnow_esp_bool == true) {
-    xTaskCreate(espnow_communication, "espnow_communication", 16384, send_param,
-                4, NULL);
-
+    xTaskCreatePinnedToCore(espnow_communication, "espnow_communication", 32768,
+                            xTaskGetCurrentTaskHandle(), 10, NULL, 0);
     ESP_LOGI(TAG, "created task - espnow communication");
   }
 }

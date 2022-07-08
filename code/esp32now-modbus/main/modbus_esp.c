@@ -20,6 +20,10 @@
 
 #include "driver/gpio.h"
 
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include "debug.h"
 #include "espnow_manage_data.h"
 #include "main_settings.h"
@@ -28,9 +32,18 @@
 
 extern uint8_t data_mac[ESP_NOW_ETH_ALEN];
 
-void modbus_communication(void *pvParameter) {
+void modbus_communication(void *arg) {
+  // Subscribe this task to TWDT, then check if it is subscribed
+  ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+  ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
+
+  // Create broadcast
+  char message[] = "111 broadcast 111";
+  int array_size_chars = sizeof(message) / sizeof(message[0]);
+  uint8_t *array_bytes = (uint8_t *)message;
+
   espnow_send *send_param_broadcast =
-      (espnow_send *)pvParameter; // this is broadcast always
+      espnow_data_create(s_broadcast_mac, array_bytes, array_size_chars);
 
   espnow_event_t evt;
 
@@ -50,10 +63,13 @@ void modbus_communication(void *pvParameter) {
     }
 
     if (uart_available > 0) {
+      // Reset watchdog before reading from uart
+      esp_task_wdt_reset();
       uart_read_bytes(UART_NUM_2, &uart_buffer[uart_count], uart_available,
                       100);
       uart_count += uart_available;
       uart_last_read = esp_timer_get_time();
+      ESP_LOGI(TAG, "Received data from uart");
     }
 
     if (uart_count > 0 &&
@@ -62,6 +78,7 @@ void modbus_communication(void *pvParameter) {
       espnow_send *send_param_uart_data =
           espnow_data_create(last_mac_addr, uart_buffer, uart_count);
 
+      ESP_LOGI(TAG, "Sending Data to espnow");
       espnow_send_smarter(send_param_uart_data);
       uart_count = 0;
     }
@@ -75,6 +92,9 @@ void modbus_communication(void *pvParameter) {
         break;
       }
       case ESPNOW_RECV_CB: {
+        // Reset watchdog after receiving espnow message
+        esp_task_wdt_reset();
+
         espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
 
         ESP_LOGI(TAG, "Received message from: " MACSTR " with lenght of: %d",
