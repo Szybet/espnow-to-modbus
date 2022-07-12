@@ -177,8 +177,8 @@ void app_main(void) {
   ESP_LOGI(TAG, "TWDT initialized");
 #endif
 
-  bool modbus_communication_bool = false;
-  bool espnow_esp_bool = true;
+  bool modbus_communication_bool = true;
+  bool espnow_esp_bool = false;
 
   if (modbus_communication_bool == true) {
     xTaskCreatePinnedToCore(modbus_communication, "modbus_communication", 32768,
