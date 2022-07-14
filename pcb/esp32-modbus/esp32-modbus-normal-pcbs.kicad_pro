@@ -368,7 +368,7 @@
       "netlist": "esp32-modbus.net",
       "specctra_dsn": "",
       "step": "../../../../../../../home/szybet/Downloads/esp32-modbus.step",
-      "vrml": "../../../../../../../home/szybet/Downloads/esp32-modbus.wrl"
+      "vrml": ""
     },
     "page_layout_descr_file": ""
   },
