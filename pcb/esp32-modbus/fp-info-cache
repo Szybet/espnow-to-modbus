@@ -1,4 +1,4 @@
-20361164159527402
+20362821994607927
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -86064,6 +86064,13 @@ varistor SIOV
 0
 2
 2
+custom
+PinHeader_1x09_P2.54mm_Horizontal
+Through hole angled pin header, 1x09, 2.54mm pitch, 6mm pin length, single row
+Through hole angled pin header THT 1x09 2.54mm single row
+0
+9
+9
 custom
 TestPoint_Pad_4.0x4.0mm
 SMD rectangular pad as test Point, square 4.0mm side length

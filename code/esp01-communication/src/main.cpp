@@ -1,11 +1,10 @@
 #include <Arduino.h>
 
 // https://www.arduino.cc/reference/en/libraries/wifi/server.available/
-#include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
 #include <SoftwareSerial.h>
 
-const char *ssid = "dragonn_EXT";
-const char *password = "ca9hi6HX";
+ESP8266WiFiMulti wifiMulti;
 
 // rx = GPIO8, tx = GPIO2
 SoftwareSerial logSerial(13, 2);
@@ -34,18 +33,13 @@ void setup() {
 
   logSerial.println("Starting");
 
-  WiFi.begin(ssid, password);
+  WiFi.mode(WIFI_STA);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    logSerial.print("Connecting to ");
-    logSerial.print(ssid);
-    logSerial.print(" With password: ");
-    logSerial.println(password);
-  }
-  logSerial.println("Connected to wifi");
-  logSerial.print("IP Address is: ");
-  logSerial.println(WiFi.localIP());
+  // WiFi connect timeout per AP. Increase when connecting takes longer.
+  wifiMulti.addAP("x", "x");
+  wifiMulti.addAP("x", "x");
+  wifiMulti.addAP("x", "x");
+
   server.begin();
 }
 
@@ -53,68 +47,92 @@ size_t read_serial(uint8_t *buffer, size_t buffer_size);
 
 bool client_connected_status = true;
 
+bool connected_wifi_log = false;
+
 void loop() {
-  if (!tcp_client) {
-    tcp_client = server.available();
-    if(client_connected_status == true)
-    {
-      client_connected_status = false;
-      logSerial.println("No client connected");
+  if (WiFi.status() == WL_CONNECTED) {
+    if (connected_wifi_log == false) {
+      connected_wifi_log = true;
+      logSerial.print("Connected to: ");
+      logSerial.println(WiFi.SSID());
+      logSerial.print("IP Address is: ");
+      logSerial.println(WiFi.localIP());
+
+      logSerial.print("Wifi strength is: ");
+      long rssi = WiFi.RSSI();
+      logSerial.println(rssi);
+
+      byte mac[6];
+      WiFi.macAddress(mac);
+      logSerial.print("MAC is: ");
+      logSerial.print(mac[5], HEX);
+      logSerial.print(":");
+      logSerial.print(mac[4], HEX);
+      logSerial.print(":");
+      logSerial.print(mac[3], HEX);
+      logSerial.print(":");
+      logSerial.print(mac[2], HEX);
+      logSerial.print(":");
+      logSerial.print(mac[1], HEX);
+      logSerial.print(":");
+      logSerial.println(mac[0], HEX);
     }
-  }
 
-  if (tcp_client) {
-    if(client_connected_status == false)
-    {
-      client_connected_status = true;
-      logSerial.println("client connected");
+    if (!tcp_client) {
+      tcp_client = server.available();
+      if (client_connected_status == true) {
+        client_connected_status = false;
+        logSerial.println("No client connected");
+      }
     }
-    size_t tcp_available = tcp_client.available();
-    if (tcp_available + tcp_count > sizeof(tcp_buffer)) {
-      tcp_available = tcp_available - (sizeof(tcp_buffer) - tcp_count);
+
+    if (tcp_client) {
+      if (client_connected_status == false) {
+        client_connected_status = true;
+        logSerial.println("client connected");
+      }
+      size_t tcp_available = tcp_client.available();
+      if (tcp_available + tcp_count > sizeof(tcp_buffer)) {
+        tcp_available = tcp_available - (sizeof(tcp_buffer) - tcp_count);
+      }
+      if (tcp_available > 0) {
+        tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available);
+        tcp_count += tcp_available;
+        tcp_last_read = millis();
+        logSerial.println("Readed bytes from tcp");
+      }
     }
-    if (tcp_available > 0) {
-      tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available);
-      tcp_count += tcp_available;
-      tcp_last_read = millis();
-      logSerial.println("Readed bytes from tcp");
+
+    if (tcp_count > 0 && ((millis() - tcp_last_read) > TCP_TIMEOUT ||
+                          tcp_count == sizeof(tcp_buffer))) {
+      Serial.write(tcp_buffer, tcp_count);
+      logSerial.println("Sended bytes to serial");
+      tcp_count = 0;
     }
-  }
 
-  if (tcp_count > 0 && ((millis() - tcp_last_read) > TCP_TIMEOUT ||
-                        tcp_count == sizeof(tcp_buffer))) {
-    Serial.write(tcp_buffer, tcp_count);
-    logSerial.println("Sended bytes to serial");
-    tcp_count = 0;
-  }
+    size_t serial_available = Serial.available();
+    if (serial_available + serial_count > sizeof(serial_buffer)) {
+      serial_available =
+          serial_available - (sizeof(serial_buffer) - serial_count);
+    }
 
-  size_t serial_available = Serial.available();
-  if (serial_available + serial_count > sizeof(serial_buffer)) {
-    serial_available =
-        serial_available - (sizeof(serial_buffer) - serial_count);
-  }
+    if (serial_available > 0) {
+      Serial.readBytes(&serial_buffer[serial_count], serial_available);
+      serial_count += serial_available;
+      serial_last_read = millis();
+      logSerial.println("Readed bytes from serial");
+    }
 
-  if (serial_available > 0) {
-    Serial.readBytes(&serial_buffer[serial_count], serial_available);
-    serial_count += serial_available;
-    serial_last_read = millis();
-    logSerial.println("Readed bytes from serial");
-  }
-
-  if (serial_count > 0 && ((millis() - serial_last_read) > SERIAL_TIMEOUT ||
-                           serial_count == sizeof(serial_buffer))) {
-    tcp_client.write(serial_buffer, serial_count);
-    logSerial.println("Sended bytes to tcp");
-    serial_count = 0;
-  }
-
-  // Check if wifi is connected
-  if (WiFi.status() != WL_CONNECTED) {
-    logSerial.print("Wifi dissconected?");
+    if (serial_count > 0 && ((millis() - serial_last_read) > SERIAL_TIMEOUT ||
+                             serial_count == sizeof(serial_buffer))) {
+      tcp_client.write(serial_buffer, serial_count);
+      logSerial.println("Sended bytes to tcp");
+      serial_count = 0;
+    }
+  } else {
+    connected_wifi_log = false;
+    logSerial.println("No wifi connection");
     delay(500);
-    if (WiFi.status() != WL_CONNECTED) {
-      logSerial.print("Wifi dissconected, resseting");
-      resetFunc();
-    }
+    wifiMulti.run(5000);
   }
 }
