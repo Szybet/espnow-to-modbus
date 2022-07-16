@@ -39,7 +39,7 @@ void espnow_communication(void *arg) {
   ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
 
   // Reset it after entering task
-  esp_task_wdt_reset();
+  //esp_task_wdt_reset();
   ESP_LOGI(TAG, "Started espnow_communication task");
 
   // Create broadcast
@@ -59,6 +59,7 @@ void espnow_communication(void *arg) {
   uint8_t uart_count = 0;
   uint8_t uart_buffer[255];
 
+  ESP_LOGI(TAG, "Started espnow_communication loop");
   while (true) {
     size_t uart_available = 0;
     ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &uart_available));
@@ -84,6 +85,8 @@ void espnow_communication(void *arg) {
 
       ESP_LOGI(TAG, "Sending Data to espnow");
       espnow_send_smarter(send_param_uart_data);
+      // Reset watchdog after sending
+      esp_task_wdt_reset();
       uart_count = 0;
     }
 

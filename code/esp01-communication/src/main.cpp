@@ -3,13 +3,14 @@
 // https://www.arduino.cc/reference/en/libraries/wifi/server.available/
 #include <ESP8266WiFiMulti.h>
 #include <SoftwareSerial.h>
+extern "C" {
+#include <user_interface.h>
+}
 
 ESP8266WiFiMulti wifiMulti;
 
 // rx = GPIO8, tx = GPIO2
 SoftwareSerial logSerial(13, 2);
-
-uint8_t ExampleRequest[] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x06, 0xC5, 0xC8};
 
 WiFiServer server(5000);
 WiFiClient tcp_client;
@@ -25,6 +26,10 @@ unsigned long tcp_last_read = 0;
 uint8_t tcp_count = 0;
 uint8_t tcp_buffer[255];
 
+uint8_t newMACAddress[] = {0x9A, 0xDA, 0xC4, 0x9D, 0x4B, 0x00};
+
+
+
 void (*resetFunc)(void) = 0;
 
 void setup() {
@@ -33,12 +38,17 @@ void setup() {
 
   logSerial.println("Starting");
 
+
   WiFi.mode(WIFI_STA);
 
+  wifi_set_macaddr(STATION_IF, newMACAddress);
+
+  
+
   // WiFi connect timeout per AP. Increase when connecting takes longer.
-  wifiMulti.addAP("x", "x");
-  wifiMulti.addAP("x", "x");
-  wifiMulti.addAP("x", "x");
+  wifiMulti.addAP("dragonn_EXT", "ca9hi6HX");
+  wifiMulti.addAP("dragonn", "ca9hi6HX");
+  wifiMulti.addAP("dragonn2", "Twb3MRYd");
 
   server.begin();
 }
@@ -99,14 +109,13 @@ void loop() {
         tcp_client.readBytes(&tcp_buffer[tcp_count], tcp_available);
         tcp_count += tcp_available;
         tcp_last_read = millis();
-        logSerial.println("Readed bytes from tcp");
       }
     }
 
     if (tcp_count > 0 && ((millis() - tcp_last_read) > TCP_TIMEOUT ||
                           tcp_count == sizeof(tcp_buffer))) {
       Serial.write(tcp_buffer, tcp_count);
-      logSerial.println("Sended bytes to serial");
+      logSerial.println("Sended bytes to serial from tcp");
       tcp_count = 0;
     }
 
@@ -120,13 +129,12 @@ void loop() {
       Serial.readBytes(&serial_buffer[serial_count], serial_available);
       serial_count += serial_available;
       serial_last_read = millis();
-      logSerial.println("Readed bytes from serial");
     }
 
     if (serial_count > 0 && ((millis() - serial_last_read) > SERIAL_TIMEOUT ||
                              serial_count == sizeof(serial_buffer))) {
       tcp_client.write(serial_buffer, serial_count);
-      logSerial.println("Sended bytes to tcp");
+      logSerial.println("Sended bytes to tcp from serial");
       serial_count = 0;
     }
   } else {

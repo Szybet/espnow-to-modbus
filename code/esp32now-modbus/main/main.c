@@ -5,6 +5,7 @@
 #include "esp_now.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
+#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
@@ -165,20 +166,15 @@ void app_main(void) {
 // https://github.com/espressif/esp-idf/blob/495d35949d50033ebcb89def98f107aa267388c0/examples/system/task_watchdog/main/task_watchdog_example_main.c#L43
 
 // Initialize watchdog
-#if !CONFIG_ESP_TASK_WDT
   // If the TWDT was not initialized automatically on startup, manually
   // intialize it now
-  esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 45000,
-      .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Bitmask of all cores
-      .trigger_panic = true, // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/kconfig.html#config-esp-system-panic
-  };
-  ESP_ERROR_CHECK(esp_task_wdt_init(&twdt_config));
+  
+  ESP_ERROR_CHECK(esp_task_wdt_init(60, true));
   ESP_LOGI(TAG, "TWDT initialized");
-#endif
 
-  bool modbus_communication_bool = true;
-  bool espnow_esp_bool = false;
+
+  bool modbus_communication_bool = false;
+  bool espnow_esp_bool = true;
 
   if (modbus_communication_bool == true) {
     xTaskCreatePinnedToCore(modbus_communication, "modbus_communication", 32768,
