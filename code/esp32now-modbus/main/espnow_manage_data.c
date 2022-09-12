@@ -17,6 +17,8 @@
 #include "espnow_manage_data.h"
 #include "main_settings.h"
 
+#include "driver/gpio.h"
+
 // Manage / Convert espnow data
 
 espnow_send *espnow_data_create(uint8_t mac[ESP_NOW_ETH_ALEN], uint8_t *array,
@@ -114,7 +116,22 @@ void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len) {
   wifi_promiscuous_pkt_t *promiscuous_pkt = (wifi_promiscuous_pkt_t *)(data - sizeof(wifi_pkt_rx_ctrl_t) - sizeof(espnow_frame_format_t));
   wifi_pkt_rx_ctrl_t *rx_ctrl = &promiscuous_pkt->rx_ctrl;
 
-  ESP_LOGE(TAG, "rssi: %d", rx_ctrl->rssi);
+
+
+  ESP_LOGI(TAG, "rssi: %d", rx_ctrl->rssi);
+
+  if(rx_ctrl->rssi > -70) {
+    set_diodes(4);
+  } else if(rx_ctrl->rssi > -80) {
+    set_diodes(3);
+  } else if(rx_ctrl->rssi > -90) {
+    set_diodes(2);
+  } else if(rx_ctrl->rssi > -100) {
+    set_diodes(1);
+  } else {
+    set_diodes(0);
+  }
+
 
   espnow_event_t evt;
   espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
@@ -166,6 +183,37 @@ void espnow_send_smarter(espnow_send *data) {
 
   esp_now_send(data->dest_mac, data->buffer, data->len);
   free(data->buffer);
+}
+
+void set_diodes(int count) {
+  int x1 = 1;
+  int x2 = 0;
+  if(count == 0) {
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, x2));
+  } else if(count == 1) {
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, x1));
+  } else if(count == 2) {
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, x1));
+  } else if(count == 3) {
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, x2));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, x1));
+  } else {
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, x1));
+      ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, x1));
+  }
 }
 
 // old

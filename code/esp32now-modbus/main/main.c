@@ -50,8 +50,25 @@ void init_gpio() {
   // configure GPIO with the given settings
 
   gpio_reset_pin(GPIO_NUM_2);
+
+  gpio_reset_pin(GPIO_NUM_33);
+  gpio_reset_pin(GPIO_NUM_27);
+  gpio_reset_pin(GPIO_NUM_26);
+  gpio_reset_pin(GPIO_NUM_25);
+
   gpio_config(&io_conf);
   gpio_set_direction(GPIO_NUM_2, GPIO_MODE_OUTPUT);
+
+  gpio_set_direction(GPIO_NUM_33, GPIO_MODE_OUTPUT);
+  gpio_set_direction(GPIO_NUM_27, GPIO_MODE_OUTPUT);
+  gpio_set_direction(GPIO_NUM_26, GPIO_MODE_OUTPUT);
+  gpio_set_direction(GPIO_NUM_25, GPIO_MODE_OUTPUT);
+
+  ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_33, 0));
+  ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_27, 0));
+  ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_26, 0));
+  ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_25, 0));
+
   ESP_LOGI(TAG, "Started GPIO");
 }
 
@@ -173,8 +190,8 @@ void app_main(void) {
   ESP_LOGI(TAG, "TWDT initialized");
 
 
-  bool modbus_communication_bool = false;
-  bool espnow_esp_bool = true;
+  bool modbus_communication_bool = true;
+  bool espnow_esp_bool = false;
 
   if (modbus_communication_bool == true) {
     xTaskCreatePinnedToCore(modbus_communication, "modbus_communication", 32768,

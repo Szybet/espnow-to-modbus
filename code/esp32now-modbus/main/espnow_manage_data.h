@@ -11,4 +11,7 @@ void print_mac(const unsigned char *mac);
 void espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status);
 void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len);
 
+// 1-4
+void set_diodes(int count);
+
 #endif
