@@ -120,13 +120,13 @@ void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len) {
 
   ESP_LOGI(TAG, "rssi: %d", rx_ctrl->rssi);
 
-  if(rx_ctrl->rssi > -70) {
+  if(rx_ctrl->rssi > -80) {
     set_diodes(4);
-  } else if(rx_ctrl->rssi > -80) {
-    set_diodes(3);
   } else if(rx_ctrl->rssi > -90) {
-    set_diodes(2);
+    set_diodes(3);
   } else if(rx_ctrl->rssi > -100) {
+    set_diodes(2);
+  } else if(rx_ctrl->rssi > -110) {
     set_diodes(1);
   } else {
     set_diodes(0);
